@@ -25,7 +25,6 @@ choose_aws_account() {
     | jq -r "${_fzf_select}" \
     | sort -k 3 \
     | fzf -q "${_filter_account}" -1 --preview="$_script_name --preview {}"
-    #| fzf -q "${_filter_account}" -1 --preview="~/.tools/aws-preview-account-cached {}"
 }
 
 
