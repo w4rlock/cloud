@@ -1,18 +1,38 @@
 #!/usr/bin/env bash
+_assume_rol='__________YOUR_______ROLE_________HERE____________'
+
+# CMD ARGS
 _script_name=$0
 _filter_account=${2:-''}
-_assume_rol='__________YOUR_______ROLE_________HERE____________'
 
 _accounts_cache_file="${HOME}/.aws/.cache/accounts.json"
 _aws_cache_session="${HOME}/.aws/.cache/session.json"
 _fzf_select='.Accounts | .[] | (.Id + " -- " +.Name)'
 
 
+C_BLUE=$(tput setaf 4)
+C_GREEN=$(tput setaf 2)
+C_RED=$(tput setaf 1)
+C_B_BLUE="${T_BOLD}$(tput bold)$(tput setaf 4)"
+C_B_GREEN="${T_BOLD}$(tput setaf 2)"
+C_B_RED="${T_BOLD}$(tput setaf 1)"
+C_RESET=$(tput sgr0)
+T_BOLD=$(tput bold)
+
+
+info() {
+  local left="${C_B_BLUE}[${C_RESET}${T_BOLD} ** ${C_B_BLUE}]${C_RESET} -"
+  local msg="$@"
+  printf "%s %s\n" "${left}" "$T_BOLD${msg}${C_RESET}"
+  sleep .25
+}
+
+
 
 check_cache_file() {
   if ! test -s ${_accounts_cache_file}; then
-    echo "[**] - Cache file not found..."
-    echo "[**] - Fetching accounts..."
+    info "Cache file not found..."
+    info "Fetching accounts..."
     aws organizations list-accounts > $_accounts_cache_file
   fi
 }
@@ -25,6 +45,7 @@ choose_aws_account() {
     | jq -r "${_fzf_select}" \
     | sort -k 3 \
     | fzf -q "${_filter_account}" -1 --preview="$_script_name --preview {}"
+    #| fzf -q "${_filter_account}" -1 --preview="~/.tools/aws-preview-account-cached {}"
 }
 
 
@@ -41,7 +62,7 @@ load_session() {
   local _account_label=$(echo $_session | jq -r '.AssumedRoleUser | .Arn' | cut -d'/' -f3)
 
 
-  echo  "[**] - Loading aws session from '${_aws_cache_session}'..."
+  info "Loading aws session from ${C_RED}'${_aws_cache_session}' ${C_RESET}..."
   export AWS_ACCESS_KEY_ID=$_access_key
   export AWS_SECRET_ACCESS_KEY=$_secret_key
   export AWS_SESSION_TOKEN=$_token
@@ -72,12 +93,12 @@ assume_role() {
   aws_logout
 
   local role="arn:aws:iam::${_id}:role/${_assume_rol}"
-  echo "[**] - Assuming Role '${role}'..."
-  echo "[**] - Session alive for 1 hour..."
+  info "Assuming Role ${C_RED}'${role}' ${C_RESET}..."
+  info "Session alive for ${C_RED}'1'${C_RESET} hour..."
 
    aws sts assume-role \
      --role-arn "${role}" \
-     --role-session-name "aws@${_name}" > $_aws_cache_session \
+     --role-session-name "${_name}@aws" > $_aws_cache_session \
      --duration-seconds 3600
      #--role-session-name "${_assume_rol}@${_name}" > $_aws_cache_session
 }
@@ -103,9 +124,9 @@ aws_restore() {
 aws_renew_token() {
   local arn=$(cat $_aws_cache_session | jq -r '.AssumedRoleUser | .Arn')
   local id=$(echo $arn | cut -d':' -f5)
-  local account_name=$(echo $arn | cut -d'@' -f2)
+  local account_name=$(echo $arn | cut -d'/' -f3 | cut -d'@' -f-1)
 
-  echo "[**] - Renew token for '${account_name}'..."
+  info "Renew token for ${C_RED}'${account_name}' ${C_RESET}..."
   assume_role "${id} -- ${account_name}"
   load_session
 }
