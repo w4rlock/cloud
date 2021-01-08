@@ -41,7 +41,7 @@ fetch_temp_creds() {
   local profile=$1
   local max_tries=${2:-0}
 
-  if ((max_tries>2)); then
+  if ((max_tries>1)); then
     return 1
   fi
 
@@ -52,7 +52,7 @@ fetch_temp_creds() {
   || {
     info "Initializing SSO..."
     sso_login $profile
-    fetch_temp_creds $profile
+    fetch_temp_creds $profile $max_tries
   }
 }
 
