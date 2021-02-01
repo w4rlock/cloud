@@ -2,18 +2,18 @@
 set -o pipefail
 
 readonly filter=${2:-''}
+readonly aws_cache_session_file="${HOME}/.aws/.sso-temp-creds"
+readonly aws_default_region=${AWS_REGION:-'us-east-1'}
+readonly aws_sso_url=${AWS_SSO_URL:-''}
 
-aws_default_region='us-east-1'
-aws_cache_session_file="${HOME}/.aws/.sso-temp-creds"
-
-C_BLUE=$(tput setaf 4)
-C_GREEN=$(tput setaf 2)
-C_RED=$(tput setaf 1)
-C_B_BLUE="${T_BOLD}$(tput bold)$(tput setaf 4)"
-C_B_GREEN="${T_BOLD}$(tput setaf 2)"
-C_B_RED="${T_BOLD}$(tput setaf 1)"
-C_RESET=$(tput sgr0)
-T_BOLD=$(tput bold)
+readonly C_BLUE=$(tput setaf 4)
+readonly C_GREEN=$(tput setaf 2)
+readonly CC_RED=$(tput setaf 1)
+readonly C_B_BLUE="${T_BOLD}$(tput bold)$(tput setaf 4)"
+readonly C_B_GREEN="${T_BOLD}$(tput setaf 2)"
+readonly C_B_RED="${T_BOLD}$(tput setaf 1)"
+readonly C_RESET=$(tput sgr0)
+readonly T_BOLD=$(tput bold)
 
 
 info() {
@@ -24,11 +24,18 @@ info() {
 }
 
 
+generate_profiles() {
+   aws-sso-util configure populate \
+    --sso-start-url $aws_sso_url \
+    --sso-region $aws_default_region \
+    --region $aws_default_region
+ }
+
 
 choose_account() {
   aws configure list-profiles \
     | sort -k 3 \
-    | fzf -q "${filter}" -1
+    | fzf -q "${filter}" -1 -0
 }
 
 
@@ -50,6 +57,7 @@ fetch_temp_creds() {
   info "Initializing credential process..."
   aws-sso-util credential-process --profile $profile 2> /dev/null | jq -r --arg profile $profile '. + {Account: $profile}'  > $aws_cache_session_file \
   || {
+    info "Session expired..."
     info "Initializing SSO..."
     sso_login $profile
     fetch_temp_creds $profile $max_tries
@@ -90,9 +98,20 @@ check_cli_connection() {
 }
 
 
+check_config() {
+  local count=$(aws configure list-profiles | wc -l)
+  info "Aws Profiles found: ${count}"
+
+  if ((count < 1)); then
+    info "Generating profiles..."
+    sleep 1s
+    generate_profiles
+  fi
+}
 
 
 login() {
+  check_config
   account=$(choose_account)
   if test -z "${account}"; then
     return 1
